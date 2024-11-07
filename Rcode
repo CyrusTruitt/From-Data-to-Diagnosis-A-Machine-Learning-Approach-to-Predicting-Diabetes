@@ -1,0 +1,506 @@
+## Loading and inspecting data ##
+
+
+library(dplyr)
+
+# Reading the data
+library(readxl)
+diabetes <- read_excel("C:/Users/Truit/OneDrive/Desktop/Fall 2024/Statistical Data Mining/Project/diabetes_data.xlsx")
+View(diabetes)
+
+# Previewing the data
+head(diabetes)
+str(diabetes)
+summary(diabetes)
+
+
+## Handling Missing values ##
+
+# Checking for missing values
+colSums(is.na(diabetes))
+
+# Example of filling missing values with column median
+diabetes <- diabetes %>%
+  mutate(across(everything(), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
+
+
+## Converting Categorical Variables to Factors ##
+
+diabetes$Sex <- as.factor(diabetes$Sex)
+diabetes$HighChol <- as.factor(diabetes$HighChol)
+diabetes$CholCheck <- as.factor(diabetes$CholCheck)
+diabetes$Smoker <- as.factor(diabetes$Smoker)
+diabetes$HeartDiseaseorAttack <- as.factor(diabetes$HeartDiseaseorAttack)
+diabetes$PhysActivity <- as.factor(diabetes$PhysActivity)
+diabetes$Fruits <- as.factor(diabetes$Fruits)
+diabetes$Veggies <- as.factor(diabetes$Veggies)
+diabetes$HvyAlcoholConsump <- as.factor(diabetes$HvyAlcoholConsump)
+diabetes$DiffWalk <- as.factor(diabetes$DiffWalk)
+diabetes$Stroke <- as.factor(diabetes$Stroke)
+diabetes$HighBP <- as.factor(diabetes$HighBP)
+diabetes$Diabetes <- as.factor(diabetes$Diabetes)  # Target variable
+
+
+## Scale or Normalize Continuous Variables ##
+
+# Standardize continuous variables
+diabetes <- diabetes %>%
+  mutate(across(c(Age, BMI, MentHlth, PhysHlth), scale))
+
+
+## Splitting the Data into Training and Testing Sets ##
+
+# Load library for splitting data
+library(caret)
+
+
+set.seed(123)
+
+# Splitting the data
+trainIndex <- createDataPartition(diabetes$Diabetes, p = 0.7, list = FALSE)
+trainData <- diabetes[trainIndex, ]
+testData <- diabetes[-trainIndex, ]
+
+
+#### Running Prediction Models ####
+
+
+
+## Step 1: Set Up Libraries and Data ##
+
+install.packages(c("dplyr", "caret", "rpart", "randomForest", "gbm", "e1071", "class", "nnet"))
+
+
+library(dplyr)
+library(caret)
+library(rpart)
+library(randomForest)
+library(gbm)
+library(e1071)
+library(class)
+library(nnet)
+
+
+
+
+## Step 2: Define a Baseline Model – Logistic Regression ##
+
+# Logistic Regression Model
+logistic_model <- glm(Diabetes ~ ., data = trainData, family = binomial)
+
+# Making predictions
+logistic_pred <- predict(logistic_model, testData, type = "response")
+logistic_class <- ifelse(logistic_pred > 0.5, 1, 0)
+
+# Confusion matrix and accuracy
+logistic_cm <- confusionMatrix(factor(logistic_class), factor(testData$Diabetes))
+print(logistic_cm)
+
+
+
+
+## Step 3: Decision Tree Model ##
+
+# Decision Tree Model
+tree_model <- rpart(Diabetes ~ ., data = trainData, method = "class")
+
+# Making predictions
+tree_pred <- predict(tree_model, testData, type = "class")
+
+# Confusion matrix and accuracy
+tree_cm <- confusionMatrix(tree_pred, factor(testData$Diabetes))
+print(tree_cm)
+
+
+
+
+## Step 4: Random Forest Model ##
+
+# Random Forest Model
+rf_model <- randomForest(Diabetes ~ ., data = trainData, ntree = 100)
+
+# Making predictions
+rf_pred <- predict(rf_model, testData)
+
+# Confusion matrix and accuracy
+rf_cm <- confusionMatrix(rf_pred, factor(testData$Diabetes))
+print(rf_cm)
+
+
+
+
+## Step 5: Gradient Boosting Machine (GBM) ##
+
+# Ensuring Diabetes is numeric (0 and 1)
+trainData$Diabetes <- as.numeric(as.character(trainData$Diabetes))
+testData$Diabetes <- as.numeric(as.character(testData$Diabetes))
+
+# Fitting the GBM model
+gbm_model <- gbm(Diabetes ~ ., data = trainData, distribution = "bernoulli", n.trees = 100)
+
+# Making predictions on the test set
+gbm_pred <- predict(gbm_model, testData, n.trees = 100, type = "response")
+gbm_class <- ifelse(gbm_pred > 0.5, 1, 0)
+
+# Calculating confusion matrix and accuracy
+library(caret)
+gbm_cm <- confusionMatrix(factor(gbm_class), factor(testData$Diabetes))
+print(gbm_cm)
+
+
+
+
+## Step 6: k-Nearest Neighbors (k-NN) ##
+
+# k-Nearest Neighbors Model
+knn_pred <- knn(train = trainData[, -ncol(trainData)], 
+                test = testData[, -ncol(testData)], 
+                cl = trainData$Diabetes, k = 5)
+
+# Confusion matrix and accuracy
+knn_cm <- confusionMatrix(knn_pred, factor(testData$Diabetes))
+print(knn_cm)
+
+
+
+
+## Step 7: Neural Network ##
+
+# Training the neural network model
+nn_model <- nnet(Diabetes ~ ., data = trainData, size = 10, maxit = 200)
+
+# Making predictions (probabilities)
+nn_pred <- predict(nn_model, testData)
+
+# Converting probabilities to class labels (assuming a 0.5 threshold)
+nn_class <- ifelse(nn_pred > 0.5, 1, 0)
+
+# Calculating confusion matrix and accuracy
+library(caret)
+nn_cm <- confusionMatrix(factor(nn_class), factor(testData$Diabetes))
+print(nn_cm)
+
+
+
+
+#### Visualization ####
+
+
+
+## Step 1: Collect Model Performance Metrics ##
+
+# Initializing a data frame to store metrics for each model
+model_metrics <- data.frame(
+  Model = character(),
+  Accuracy = numeric(),
+  Sensitivity = numeric(),
+  Specificity = numeric(),
+  AUC = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Function to calculate metrics for each model
+library(pROC)
+
+get_metrics <- function(predictions, true_values, model_name) {
+  cm <- confusionMatrix(factor(predictions), factor(true_values))
+  auc <- auc(roc(true_values, as.numeric(predictions)))
+  data.frame(
+    Model = model_name,
+    Accuracy = cm$overall['Accuracy'],
+    Sensitivity = cm$byClass['Sensitivity'],
+    Specificity = cm$byClass['Specificity'],
+    AUC = auc
+  )
+}
+
+# Logistic Regression
+logistic_pred <- predict(logistic_model, testData, type = "response")
+logistic_class <- ifelse(logistic_pred > 0.5, 1, 0)
+model_metrics <- rbind(model_metrics, get_metrics(logistic_class, testData$Diabetes, "Logistic Regression"))
+
+# Decision Tree
+tree_pred <- predict(tree_model, testData, type = "class")
+model_metrics <- rbind(model_metrics, get_metrics(tree_pred, testData$Diabetes, "Decision Tree"))
+
+# Random Forest
+rf_pred <- predict(rf_model, testData)
+model_metrics <- rbind(model_metrics, get_metrics(rf_pred, testData$Diabetes, "Random Forest"))
+
+# Gradient Boosting Machine (GBM)
+gbm_pred <- predict(gbm_model, testData, n.trees = 100, type = "response")
+gbm_class <- ifelse(gbm_pred > 0.5, 1, 0)
+model_metrics <- rbind(model_metrics, get_metrics(gbm_class, testData$Diabetes, "GBM"))
+
+# k-Nearest Neighbors (k-NN)
+knn_pred <- knn(train = trainData[, -ncol(trainData)], 
+                test = testData[, -ncol(testData)], 
+                cl = trainData$Diabetes, k = 5)
+model_metrics <- rbind(model_metrics, get_metrics(knn_pred, testData$Diabetes, "k-NN"))
+
+# Neural Network
+nn_pred <- predict(nn_model, testData)
+nn_class <- ifelse(nn_pred > 0.5, 1, 0)
+model_metrics <- rbind(model_metrics, get_metrics(nn_class, testData$Diabetes, "Neural Network"))
+
+
+model_metrics
+
+
+
+
+## Step 2: Visualize Metrics ##
+
+# Plotting accuracy, sensitivity, and specificity
+install.packages("tidyr")
+library(tidyr)
+library(ggplot2)
+metrics_long <- model_metrics %>%
+  pivot_longer(cols = c("Accuracy", "Sensitivity", "Specificity"), names_to = "Metric", values_to = "Value")
+
+metrics_long <- model_metrics %>%
+  pivot_longer(cols = c("Accuracy", "Sensitivity", "Specificity"), names_to = "Metric", values_to = "Value")
+
+ggplot(metrics_long, aes(x = Model, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Figure 1. Model Comparison for Accuracy, Sensitivity, and Specificity") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Accuracy" = "#BF4341", "Sensitivity" = "#F0EFD6", "Specificity" = "#84B0B5")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+# AUC Plot
+ggplot(model_metrics, aes(x = Model, y = AUC, fill = Model)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Figure 2. AUC Comparison of Models", y = "AUC", x = NULL) +
+  theme_minimal() +
+  scale_fill_manual(values = c("Decision Tree" = "#BF4341", "GBM" = "#F0EFD6", "k-NN" = "#84B0B5", "Logistic Regression" = "#FEC52E", "Neural Network" = "#1e64b6", "Random Forest" = "gray")) +  
+  geom_text(aes(label = round(AUC, 2)), vjust = -0.3) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  theme(axis.text.x = element_blank())
+
+
+library(pROC)
+
+# Setting up an empty ROC plot with a title, axes, and guidelines for reference
+plot(1, type = "n", xlim = c(0, 1), ylim = c(0, 1), xlab = "False Positive Rate", 
+     ylab = "True Positive Rate", main = "Figure 3. ROC Curves for Model Comparison")
+abline(a = 0, b = 1, lty = 2, col = "gray")  # Add diagonal line for reference
+
+# Function to plot individual ROC curves with AUC calculation
+plot_roc_curves <- function(true_values, predictions, model_name, color, line_type = 1) {
+  roc_obj <- roc(true_values, predictions)
+  plot(roc_obj, col = color, lty = line_type, lwd = 2, add = TRUE)
+  auc_value <- auc(roc_obj)
+  return(list(roc = roc_obj, auc = auc_value))
+}
+
+# Calculate and plot ROC curves with varying colors and line types
+logistic_roc <- plot_roc_curves(testData$Diabetes, logistic_pred, "Logistic Regression", "blue", 1)
+tree_roc <- plot_roc_curves(testData$Diabetes, tree_pred_prob, "Decision Tree", "green", 2)
+rf_roc <- plot_roc_curves(testData$Diabetes, rf_pred_prob, "Random Forest", "red", 3)
+gbm_roc <- plot_roc_curves(testData$Diabetes, gbm_pred, "GBM", "purple", 4)
+nn_roc <- plot_roc_curves(testData$Diabetes, nn_pred, "Neural Network", "cyan", 5)
+
+# Add legend with AUC values
+legend(x = 0.5, y = 0.35, legend = c(
+  paste("Logistic Regression (AUC =", round(logistic_roc$auc, 2), ")"),
+  paste("Decision Tree (AUC =", round(tree_roc$auc, 2), ")"),
+  paste("Random Forest (AUC =", round(rf_roc$auc, 2), ")"),
+  paste("GBM (AUC =", round(gbm_roc$auc, 2), ")"),
+  paste("Neural Network (AUC =", round(nn_roc$auc, 2), ")")
+),
+col = c("blue", "green", "red", "purple", "cyan"), lwd = 2,
+lty = 1:5, bty = "n", cex = 0.8  
+)
+
+
+
+
+
+
+
+# Assuming rf_model is your trained random forest model
+library(randomForest)
+importance_rf <- importance(rf_model)
+importance_rf_df <- data.frame(Feature = rownames(importance_rf), Importance = importance_rf[, "MeanDecreaseGini"])
+
+
+# Load ggplot2 for plotting
+library(ggplot2)
+
+
+#### Feature Importance for Diabetes Prediction ####
+
+ggplot(importance_rf_df, aes(x = reorder(Feature, Importance), y = Importance, fill = Importance)) +
+  geom_bar(stat = "identity", color = "black") +
+  coord_flip() +
+  scale_fill_gradient(low = "#F0EFD6", high = "#BF4341") +
+  labs(title = "Feature Importance for Diabetes Prediction",
+       subtitle = "Identifying Key Predictors in the Model",
+       x = "Feature",
+       y = "") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, color = "black", size = 16),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.text.x = element_blank()
+  ) +
+  geom_text(aes(label = round(Importance, 0)), hjust = -0.2, color = "black", size = 3.5)
+
+
+
+#### Exploratory Data Analysis ####
+
+## Distribution of Key Features (e.g., Age, BMI, Glucose Level) ##
+
+# Histogram for Age Distribution
+ggplot(diabetes, aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "#84B0B5", color = "black", alpha = 0.8) + 
+  labs(title = "Age Distribution of Participants", 
+       subtitle = "Histogram of Age with a 5-Year Binwidth",
+       x = "Age (Years)",
+       y = "Number of Participants") +
+  theme_minimal(base_size = 14) +  
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, color = "black", size = 16),
+    plot.subtitle = element_text(hjust = 0.5, color = "black", size = 12),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_text(size = 10),
+    panel.grid.major.y = element_line(color = "gray85"), 
+    panel.grid.minor = element_blank(),  
+    panel.grid.major.x = element_blank()  
+  ) 
+
+# Converting Diabetes column to a factor with appropriate labels
+diabetes$Diabetes <- factor(diabetes$Diabetes, levels = c(0, 1), labels = c("No Diabetes", "Diabetes"))
+
+
+ggplot(diabetes, aes(x = BMI, fill = Diabetes)) +
+  geom_density(alpha = 0.6, color = "black") +
+  labs(title = "BMI Density by Diabetes Status", 
+       subtitle = "Comparing BMI Distributions for Individuals With and Without Diabetes",
+       x = "BMI", 
+       y = "Density") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, color = "#2C3E50", size = 16),
+    plot.subtitle = element_text(hjust = 0.5, color = "#34495E", size = 12),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_text(size = 10),
+    legend.position = "top",  
+    legend.title = element_blank(),  
+    legend.text = element_text(size = 10)
+  ) +
+  scale_fill_manual(values = c("No Diabetes" = "#84B0B5", "Diabetes" = "#BF4341")) +
+  guides(fill = guide_legend(override.aes = list(color = "black")))
+
+
+
+
+## Correlation Heatmap for Feature Relationships ##
+
+# Calculating correlations between numeric features
+numeric_data <- diabetes[, sapply(diabetes, is.numeric)]
+correlation_matrix <- cor(numeric_data)
+
+# Plot the heatmap
+library(ggplot2)
+library(reshape2)
+
+
+correlation_melt <- melt(correlation_matrix)
+
+# Enhanced correlation heatmap
+ggplot(correlation_melt, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "#84B0B5", high = "#BF4341", mid = "#F0EFD6", midpoint = 0, 
+                       limits = c(-1, 1), name = "Correlation") +
+  labs(title = "Correlation Heatmap of Features",
+       subtitle = "Understanding Relationships Between Variables",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, color = "black", size = 16),
+    plot.subtitle = element_text(hjust = 0.5, color = "black", size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, color = "black", size = 10),
+    axis.text.y = element_text(color = "black", size = 10),
+    panel.grid = element_blank(), 
+    legend.position = "right"  
+  ) +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 2.5)  
+
+
+
+
+## Categorical Variables ##
+
+# 100% Stacked Bar Plot for Smoking Status by Diabetes
+
+diabetes$Diabetes <- factor(diabetes$Diabetes, levels = c(0, 1), labels = c("No Diabetes", "Diabetes"))
+diabetes$Smoker <- factor(diabetes$Smoker, levels = c(0, 1), labels = c("Non-Smoker", "Smoker"))
+
+# Enhanced 100% Stacked Bar Chart for Smoking and Diabetes Status
+ggplot(diabetes, aes(x = factor(Smoker), fill = factor(Diabetes))) +
+  geom_bar(position = "fill", color = "#F0EFD6", width = 0.7) + 
+  labs(
+    title = "Proportion of Smoking Status by Diabetes Status",
+    subtitle = "Comparing Smoking Behavior Among Diabetic and Non-Diabetic Individuals",
+    x = "Smoking Status", 
+    y = "Proportion"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, color = "black", size = 16),
+    plot.subtitle = element_text(hjust = 0.5, color = "black", size = 12),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_text(size = 10, color = "black"),
+    legend.position = "top", 
+    legend.title = element_blank(),  
+    legend.text = element_text(size = 10)
+  ) +
+  scale_fill_manual(values = c("No Diabetes" = "#84B0B5", "Diabetes" = "#BF4341")) +
+  scale_y_continuous(labels = scales::percent)  
+
+
+
+
+## Pair Plot for Key Predictors (Age, BMI, Glucose Level) ##
+
+
+install.packages("GGally")
+library(GGally)
+
+
+library(GGally)
+library(ggplot2)
+
+# Sampling 1000 random rows from the diabetes dataset
+set.seed(123)  
+diabetes_sample <- diabetes[sample(1:nrow(diabetes), 1000), ]
+
+# Selecting relevant columns from the sampled data
+diabetes_data <- diabetes_sample[, c("Age", "BMI", "GenHlth", "HighBP", "PhysHlth", "Diabetes")]
+
+# Enhanced pair plot with customized aesthetics
+ggpairs(
+  diabetes_data,
+  aes(color = factor(Diabetes), alpha = 0.6),
+  upper = list(continuous = "smooth"),  
+  lower = list(continuous = "points")   
+) +
+  labs(title = "Pair Plot of Key Health Features by Diabetes Status") +
+  theme_minimal(base_size = 14) +  
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, color = "#2C3E50", size = 16),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10, color = "#2C3E50"),
+    axis.text.y = element_text(size = 10, color = "#2C3E50"),
+    legend.position = "top",  
+    legend.title = element_text(size = 12, face = "bold"),  
+    legend.text = element_text(size = 10)
+  ) +
+  scale_color_manual(
+    values = c("No Diabetes" = "#84B0B5", "Diabetes" = "#BF4341"),
+    name = "Diabetes Status"  
+  )
+
+
