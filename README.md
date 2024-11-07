@@ -106,3 +106,9 @@ This project not only presents a comparative analysis of model effectiveness but
 
 
 ![Pair Plot of Key Health Features by Diabetes Status](https://github.com/user-attachments/assets/6bedcf20-933b-4a69-8f5d-7e8476fc7e0e)
+
+# Final Poster
+
+![Screenshot 2024-11-07 160754](https://github.com/user-attachments/assets/88458819-1cd0-4dd3-86dd-da97439a9c0d)
+
+
